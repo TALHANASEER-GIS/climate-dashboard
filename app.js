@@ -339,6 +339,17 @@ function renderDashboard(wData, aData, name, country, elev) {
   window._chartData = day;
   drawChart(day);
 
+  // ── Map ──────────────────────────────────────────────────
+  updateMap(
+    wData.latitude, wData.longitude,
+    name,
+    `${Math.round(cur.temperature_2m)}°C`,
+    info.label,
+    info.icon,
+    `${Math.round(cur.wind_speed_10m)} km/h`,
+    `${cur.relative_humidity_2m}%`
+  );
+
   setMode('dashboard');
 }
 
@@ -455,5 +466,151 @@ window.addEventListener('resize', () => {
   }, 120);
 });
 
+// ── MAP ───────────────────────────────────────────────────
+let leafletMap     = null;
+let cityMarker     = null;
+let radarLayer     = null;
+let overlayLayer   = null;
+let activeLayerKey = 'radar';
+
+// OpenWeatherMap-style tile layers using free sources
+const LAYER_CONFIG = {
+  radar: {
+    legendClass: 'radar-legend',
+    legendTitle: 'Precipitation',
+    legendLabels: ['None', 'Light', 'Heavy'],
+    getTileUrl: async () => {
+      // RainViewer — free precipitation radar, no key needed
+      try {
+        const data = await (await fetch('https://api.rainviewer.com/public/weather-maps.json')).json();
+        const ts   = data.radar.past[data.radar.past.length - 1].time;
+        return `https://tilecache.rainviewer.com/v2/radar/${ts}/512/{z}/{x}/{y}/4/1_1.png`;
+      } catch { return null; }
+    },
+  },
+  temp: {
+    legendClass: 'temp-legend',
+    legendTitle: 'Temperature',
+    legendLabels: ['Cold', 'Mild', 'Hot'],
+    getTileUrl: async () =>
+      'https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=demo',
+  },
+  wind: {
+    legendClass: 'wind-legend',
+    legendTitle: 'Wind Speed',
+    legendLabels: ['Calm', 'Moderate', 'Strong'],
+    getTileUrl: async () =>
+      'https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=demo',
+  },
+  clouds: {
+    legendClass: 'cloud-legend',
+    legendTitle: 'Cloud Cover',
+    legendLabels: ['Clear', 'Partly', 'Overcast'],
+    getTileUrl: async () =>
+      'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=demo',
+  },
+};
+
+function initMap() {
+  if (leafletMap) return;
+
+  leafletMap = L.map('weatherMap', {
+    center: [30, 0],
+    zoom: 2,
+    zoomControl: true,
+    attributionControl: true,
+  });
+
+  // Base tile layer — OpenStreetMap (free, no key)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 18,
+  }).addTo(leafletMap);
+
+  // Load initial radar layer
+  loadMapLayer('radar');
+
+  // Tab switching
+  document.querySelectorAll('.map-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.map-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadMapLayer(btn.dataset.layer);
+    });
+  });
+}
+
+async function loadMapLayer(key) {
+  activeLayerKey = key;
+  const cfg = LAYER_CONFIG[key];
+
+  // Remove old overlay
+  if (overlayLayer) { leafletMap.removeLayer(overlayLayer); overlayLayer = null; }
+
+  // Update legend
+  const legendBar = document.querySelector('.legend-bar');
+  const legendTitle = document.querySelector('.legend-title');
+  const legendLabels = document.querySelectorAll('.legend-labels span');
+  if (legendBar) {
+    legendBar.className = `legend-bar ${cfg.legendClass}`;
+    legendTitle.textContent = cfg.legendTitle;
+    cfg.legendLabels.forEach((l, i) => { if (legendLabels[i]) legendLabels[i].textContent = l; });
+  }
+
+  const tileUrl = await cfg.getTileUrl();
+  if (!tileUrl) return;
+
+  overlayLayer = L.tileLayer(tileUrl, {
+    opacity: 0.7,
+    maxZoom: 18,
+    attribution: key === 'radar' ? '© <a href="https://rainviewer.com">RainViewer</a>' : '© OpenWeatherMap',
+  }).addTo(leafletMap);
+}
+
+function updateMap(lat, lon, name, temp, desc, icon, wind, humidity) {
+  if (!leafletMap) return;
+
+  // Fly to city
+  leafletMap.flyTo([lat, lon], 8, { duration: 1.5 });
+
+  // Remove old marker
+  if (cityMarker) { leafletMap.removeLayer(cityMarker); cityMarker = null; }
+
+  // Custom icon
+  const markerIcon = L.divIcon({
+    className: '',
+    html: `<div style="
+      background: linear-gradient(135deg,#1c2a4a,#0d1117);
+      border: 2.5px solid #58a6ff;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    ">
+      <span style="transform:rotate(45deg);font-size:18px;">${icon}</span>
+    </div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -44],
+  });
+
+  cityMarker = L.marker([lat, lon], { icon: markerIcon }).addTo(leafletMap);
+
+  cityMarker.bindPopup(`
+    <div class="map-popup">
+      <div class="pop-city">${name}</div>
+      <div class="pop-icon">${icon}</div>
+      <div class="pop-temp">${temp}</div>
+      <div class="pop-desc">${desc}</div>
+      <div class="pop-stats">
+        <span>💧 ${humidity}</span>
+        <span>💨 ${wind}</span>
+      </div>
+    </div>
+  `, { maxWidth: 200 }).openPopup();
+}
+
 // ── Init ──────────────────────────────────────────────────
 setMode('welcome');
+initMap();
