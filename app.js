@@ -184,13 +184,19 @@ function renderSuggestions(results) {
 
 async function doSearch(q) {
   if (!q) return;
+  setMode('loading');
   try {
     const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
-    const data = await (await fetch(url)).json();
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error('Geocoding error');
+    const data = await res.json();
     if (!data.results?.length) { showError('City not found. Try a different name.'); return; }
     const r = data.results[0];
     fetchWeather(r.latitude, r.longitude, r.name, r.country ?? '', r.elevation ?? 0);
-  } catch { showError('Could not connect. Check your internet connection.'); }
+  } catch (err) {
+    console.error('Search error:', err);
+    showError('Could not connect. Check your internet connection.');
+  }
 }
 
 // ── Geolocation ───────────────────────────────────────────
@@ -232,18 +238,29 @@ async function fetchWeather(lat, lon, name, country, elev) {
       timezone: 'auto',
     });
 
-    const [wRes, aRes] = await Promise.all([
+    // Use allSettled so air quality failure never breaks weather data
+    const [wResult, aResult] = await Promise.allSettled([
       fetch(`https://api.open-meteo.com/v1/forecast?${wParams}`),
       fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${aParams}`),
     ]);
 
-    if (!wRes.ok) throw new Error('Weather API error');
-
+    // Weather is required — bail if it failed
+    if (wResult.status === 'rejected') throw new Error('Weather fetch failed');
+    const wRes = wResult.value;
+    if (!wRes.ok) throw new Error(`Weather API error: ${wRes.status}`);
     const wData = await wRes.json();
-    const aData = aRes.ok ? await aRes.json() : null;
+
+    // Air quality is optional — silently degrade if unavailable
+    let aData = null;
+    try {
+      if (aResult.status === 'fulfilled' && aResult.value.ok) {
+        aData = await aResult.value.json();
+      }
+    } catch { /* air quality unavailable — no problem */ }
 
     renderDashboard(wData, aData, name, country, elev || wData.elevation || 0);
   } catch (err) {
+    console.error('Weather fetch error:', err);
     showError('Failed to fetch weather data. Please try again.');
   }
 }
