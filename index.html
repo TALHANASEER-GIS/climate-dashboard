@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkyView — Weather Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <!-- Background blobs -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+
+  <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🌤</span>
+        <span class="logo-text">SkyView</span>
+      </div>
+      <div class="search-wrapper">
+        <input
+          type="text"
+          id="searchInput"
+          class="search-input"
+          placeholder="Search city..."
+          autocomplete="off"
+        />
+        <button id="searchBtn" class="search-btn" title="Search">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+        <ul id="suggestions" class="suggestions hidden"></ul>
+      </div>
+      <button id="locateBtn" class="locate-btn" title="Use my location">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+          <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/>
+        </svg>
+      </button>
+      <!-- Dark / Light mode toggle -->
+      <button id="themeToggle" class="theme-toggle" title="Toggle theme">
+        <span id="themeIcon">☀️</span>
+      </button>
+    </header>
+
+    <!-- Loading state -->
+    <div id="loadingState" class="loading-state hidden">
+      <div class="spinner"></div>
+      <p>Fetching weather data…</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorState" class="error-state hidden">
+      <span class="error-icon">⚠️</span>
+      <p id="errorMsg">Something went wrong.</p>
+    </div>
+
+    <!-- Welcome state -->
+    <div id="welcomeState" class="welcome-state">
+      <div class="welcome-icon">🌍</div>
+      <h2>Where are you today?</h2>
+      <p>Search for a city or use your current location to get the latest weather forecast.</p>
+    </div>
+
+    <!-- Main dashboard (hidden until data loads) -->
+    <main id="dashboard" class="dashboard hidden">
+
+      <!-- Current Weather Card -->
+      <section class="current-card">
+        <div class="current-left">
+          <div class="current-location">
+            <span id="cityName">—</span>
+            <span id="countryName" class="country"></span>
+          </div>
+          <div class="current-date" id="currentDate">—</div>
+          <div class="current-temp-row">
+            <span class="current-icon" id="currentIcon">🌤</span>
+            <span class="current-temp" id="currentTemp">—</span>
+          </div>
+          <div class="current-desc" id="currentDesc">—</div>
+          <div class="current-feels">
+            Feels like <span id="feelsLike">—</span>
+          </div>
+        </div>
+        <div class="current-right">
+          <div class="stat-grid">
+            <div class="stat-item">
+              <span class="stat-label">💧 Humidity</span>
+              <span class="stat-value" id="humidity">—</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">💨 Wind</span>
+              <span class="stat-value" id="windSpeed">—</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">🌧 Precip.</span>
+              <span class="stat-value" id="precipitation">—</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">📍 Elevation</span>
+              <span class="stat-value" id="elevation">—</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- UV Index & Air Quality Row -->
+      <section class="extras-row">
+        <!-- UV Index Card -->
+        <div class="extra-card">
+          <div class="extra-header">
+            <span class="extra-title">☀️ UV Index</span>
+            <span class="uv-badge" id="uvBadge">—</span>
+          </div>
+          <div class="uv-bar-wrap">
+            <div class="uv-bar">
+              <div class="uv-fill" id="uvFill"></div>
+              <div class="uv-pointer" id="uvPointer"></div>
+            </div>
+            <div class="uv-scale">
+              <span>Low</span><span>Mod</span><span>High</span><span>V.High</span><span>Extreme</span>
+            </div>
+          </div>
+          <p class="extra-tip" id="uvTip">—</p>
+        </div>
+
+        <!-- Air Quality Card -->
+        <div class="extra-card">
+          <div class="extra-header">
+            <span class="extra-title">🌬️ Air Quality</span>
+            <span class="aqi-badge" id="aqiBadge">—</span>
+          </div>
+          <div class="aqi-stats">
+            <div class="aqi-item">
+              <span class="aqi-label">PM2.5</span>
+              <span class="aqi-value" id="pm25">—</span>
+            </div>
+            <div class="aqi-item">
+              <span class="aqi-label">PM10</span>
+              <span class="aqi-value" id="pm10">—</span>
+            </div>
+            <div class="aqi-item">
+              <span class="aqi-label">CO</span>
+              <span class="aqi-value" id="co">—</span>
+            </div>
+            <div class="aqi-item">
+              <span class="aqi-label">NO₂</span>
+              <span class="aqi-value" id="no2">—</span>
+            </div>
+          </div>
+          <p class="extra-tip" id="aqiTip">—</p>
+        </div>
+      </section>
+
+      <!-- Hourly Forecast (next 24h) -->
+      <section class="hourly-section">
+        <h3 class="section-title">Next 24 Hours</h3>
+        <div class="hourly-scroll-wrap">
+          <div class="hourly-track" id="hourlyTrack">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 7-Day Forecast -->
+      <section class="forecast-section">
+        <h3 class="section-title">7-Day Forecast</h3>
+        <div class="forecast-grid" id="forecastGrid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- Weekly Temperature Chart -->
+      <section class="chart-section">
+        <h3 class="section-title">Temperature This Week</h3>
+        <div class="chart-wrapper">
+          <canvas id="tempChart"></canvas>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      Powered by <a href="https://open-meteo.com/" target="_blank">Open-Meteo</a> &nbsp;•&nbsp; SkyView © 2026
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
